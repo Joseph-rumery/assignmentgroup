@@ -1,0 +1,148 @@
+import requests
+from bs4 import BeautifulSoup
+import random
+import csv
+
+def get_links_from_random_pages(url):
+    # Define custom headers
+    headers = {
+        "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36"
+    }
+
+    # Generate three random page numbers between 1 and 115
+    random_pages = random.sample(range(1, 118), 110)
+    links = []
+
+    # Iterate through the random page numbers
+    for page_num in random_pages:
+        # Construct URL for the current page
+        page_url = f'{url}/{page_num}'
+
+        # Fetch the webpage with custom headers
+        response = requests.get(page_url, headers=headers)
+
+        # Check if the request was successful (status code 200)
+        if response.status_code == 200:
+            # Parse the HTML content of the current page
+            soup = BeautifulSoup(response.content, 'html.parser')
+
+            # Find all <p> tags with class "lyric-meta-title"
+            p_tags = soup.find_all('p', class_='lyric-meta-title')
+
+            # Extract links from <a> tags within <p> tags of the current page
+            for p_tag in p_tags:
+                a_tag = p_tag.find('a', href=True)
+                if a_tag:
+                    link = "https://www.lyrics.com" + a_tag['href']  # Append base URL to link
+                    links.append(link)
+                    #print(link)
+        else:
+            print(f"Failed to fetch the webpage for page {page_num}. Status code:", response.status_code)
+
+    return links
+
+def fetch_lyrics(link):
+    # Define custom headers
+    headers = {
+        "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36"
+    }
+
+    # Fetch the webpage with custom headers
+    response = requests.get(link, headers=headers)
+
+    # Check if the request was successful (status code 200)
+    if response.status_code == 200:
+        # Parse the HTML content of the page
+        soup = BeautifulSoup(response.content, 'html.parser')
+
+        # Extract the lyrics of the song #recommended action in the if statment from Jackson
+        lyrics_tag = soup.find('pre', id='lyric-body-text')
+        if lyrics_tag:
+            lyrics = lyrics_tag.get_text(" ", strip=True)
+            lyrics = "".join((l + ". ") for l in lyrics.splitlines() if l)
+            lyrics = lyrics.replace('\t', ' ')
+
+            return lyrics
+        else:
+            return "Lyrics not found"
+    else:
+        print(f"Failed to fetch the webpage. Status code:", response.status_code)
+        return None
+
+def generate_genre_lyrics_csv(genre_links, tsv_file):
+    # Open the CSV file in write mode
+    with open(tsv_file, 'w', newline='', encoding='utf-8') as file:
+        writer = csv.writer(file, delimiter='\t')
+
+        # Write the header row
+        writer.writerow(['Genre', 'Lyrics'])
+
+        # Iterate through each genre and its corresponding links
+        for genre, links in genre_links.items():
+            # Iterate through each link for the current genre
+            for link in links:
+                # Fetch the lyrics for the current link
+                lyrics = fetch_lyrics(link)
+
+                # Write the genre and lyrics to the CSV file
+                writer.writerow([genre, lyrics])
+
+    print(f"TSV file '{tsv_file}' generated successfully!")
+
+def remove_songs_by_title(genre_links, title):
+    # Replace spaces with plus signs in the title
+    modified_title = title.replace(' ', '+')
+
+    # Iterate through each genre and its corresponding links
+    for genre, links in genre_links.items():
+        # Create a list to store links of songs to be removed
+        links_to_remove = []
+
+        # Iterate through each link for the current genre
+        for link in links:
+            # Split the link by '/' and get the last part
+            last_part = link.split('/')[-1]
+
+            # Check if the modified title matches the last part of the link
+            if modified_title.lower() in last_part.lower():
+                # Add the link to the list of links to be removed
+                links_to_remove.append(link)
+
+        # Remove the links of songs found in the title
+        for link in links_to_remove:
+            genre_links[genre].remove(link)
+            #print(f"Song with title '{title}' removed from genre '{genre}'")
+
+    #print("Song removal completed successfully!")
+
+def main():
+    #create dictionary and scrap links
+    dic = {}
+    dic['RockandRoll'] = get_links_from_random_pages('https://www.lyrics.com/style/Rock+__+Roll')
+    dic['Country'] = get_links_from_random_pages('https://www.lyrics.com/style/Country')
+    dic['Blues'] = get_links_from_random_pages('https://www.lyrics.com/genre/Blues')
+    dic['Pop'] = get_links_from_random_pages('https://www.lyrics.com/genre/Pop')
+    dic['HipHop'] = get_links_from_random_pages('https://www.lyrics.com/genre/Hip+Hop')
+    dic['HeavyMetal'] = get_links_from_random_pages('https://www.lyrics.com/style/Heavy+Metal')
+
+    #test song names to get rid of 
+    testsongs = ['Fight The Power', 'Rap God', "Rapper's Delight",'The Way I Are', 'DNA','Dark Matter', 'Normal People Things',
+                 'Off My Face','Runaway','Smoke On the Water','Always Free', 'Let the Good Times Roll',"Now's the Time",
+                 'The Sky is Crying', 'Why I Sing the Blues', 'All I Need Is You', 'Deeper Well','I Remember Everything',
+                 'Last Night', 'White Horse', 'Ace of Spades', 'Bat Country', 'Crazy Train', 'Fighting Myself', 'Symphony Of Destruction',
+                 'Beautiful Things', 'Daylight', 'Greedy','Used To Be Young','Vampire']
+    
+    #get rid of test songs
+    for song in testsongs:
+        remove_songs_by_title(dic,song)
+
+    #create csv file
+    tsv_file = 'genre_lyrics.tsv'
+    with open(tsv_file, 'w', newline='') as csvfile:
+        pass
+
+    #create csv file
+    generate_genre_lyrics_csv(dic, tsv_file)
+
+if __name__ == "__main__":
+    main()  
